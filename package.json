@@ -1,0 +1,11 @@
+{
+    "name": "twitter-fetcher-api",
+    "version": "1.0.0",
+    "main": "api/tweet_fetch_api.js",
+    "dependencies": {
+        "express": "^4.21.2",
+        "franc": "^6.2.0",
+        "langs": "^2.0.0",
+        "rettiwt-api": "^5.0.0-alpha.4"
+    }
+}
