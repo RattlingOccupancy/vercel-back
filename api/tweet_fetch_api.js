@@ -4,10 +4,9 @@ const franc = francModule.franc;
 const express = require('express');
 const app = express();
 
-// Middleware to parse JSON bodies
 app.use(express.json());
 
-// Your API keys (keep them here or move to environment variables for better security)
+// ✅ Your API keys
 const apiKeys = [
     "a2R0PXFjdlRVM3dtR3ZEU0lCMmhiRUtxYXBXZ2F6MzR6ZnZENjlsY2J2NmY7YXV0aF90b2tlbj01ZmEwODVkOWM2YWMzODlkY2Y4MjRlNjc5MzQwNzc5ZTg0NWRmZTM1O2N0MD1mZjRkNTYyMDU0YTZhZWU4OTMxYTY5ODNjNjc0NmQ5NDljZWNlZGQ5MDc0ZjA2MDliYzFjNmFhMjY4NzE0OWVmNzE2YTU3YmIxMWY1YjBlM2VlMjc0MmQzNjk4OTk4ZjQxNjA0ZGJiNTIyODAyOWQ4NzgxNjdmMmNhYTliMDBiY2YzZGI5MWE0YzZjN2Q5YTY2NmQzZmNkNGE4NmM2ZDQ5O3R3aWQ9dSUzRDE2NzE0MzAzMDg4NzE0MDU1Njg7",
     
@@ -81,16 +80,25 @@ const apiKeys = [
 "a2R0PWEzZ3pQY3dXWnFaT0xSckdXamR6TUhseDdJdG96ZkFMbWZpZlNEbVI7YXV0aF90b2tlbj1kZGY1NmIyYThmOTViZmYxMzBlNzg3YjA3MWM3ZWFhYmYzOTIwZDM3O2N0MD1mMmRmZjZlNzQ5OTcxODcxMTFhZWIzNGU4OGQwNjFkODYyOGRkZmIwNTY1Zjc4MGEyMGYwZjI1N2Y2YTM0NWQyOWJhZTQ2NDNhOGUyMDhiM2I0M2E0ZGNhOWM4MjZhY2ViNjA5NzNmM2IwN2E2OWZjYzk3YmNkM2U0YTNlODhhMGIwNGJiMzkxODljYzY2MmQ3NmM0YTc2MWE2MWQ0MjEzO3R3aWQ9dSUzRDE2NzE0MzAzMDg4NzE0MDU1Njg7"
 ];
 
+
+// ✅ Rettiwt instance with delay
 function createRandomRettiwt() {
     const randomKey = apiKeys[Math.floor(Math.random() * apiKeys.length)];
-    return new Rettiwt({ apiKey: randomKey, logging: false });
+    return new Rettiwt({
+        apiKey: randomKey,
+        logging: false,
+        delay: () => 1000 + Math.random() * 1000 // ✅ 1–2 sec delay
+    });
 }
 
-// The core fetching logic, now as an async function that returns data
-async function getTweets(topic, totalCount) {
+// ✅ Core tweet fetching logic (returns [{ text: ... }])
+async function getTweets(topic, totalCount = 20) {
     const allTweets = [];
     const seenIds = new Set();
-    const filters = [{ keywords: [topic] }, { hashtags: [topic.replace('#', '')] }];
+    const filters = [
+        { keywords: [topic] },
+        { hashtags: [topic.replace('#', '')] }
+    ];
 
     for (const filter of filters) {
         const rettiwt = createRandomRettiwt();
@@ -101,10 +109,11 @@ async function getTweets(topic, totalCount) {
             const remaining = totalCount - allTweets.length;
             const batchSize = Math.min(50, remaining);
             let tweets;
+
             try {
                 tweets = await rettiwt.tweet.search(filter, batchSize, cursor);
             } catch (err) {
-                console.error(`API error, trying next filter or stopping: ${err.message}`);
+                console.error(`API error: ${err.message}`);
                 break;
             }
 
@@ -114,50 +123,66 @@ async function getTweets(topic, totalCount) {
             }
 
             for (const tweet of tweets.list) {
-                if (seenIds.has(tweet.id) || !tweet.fullText || tweet.fullText.length <= 20 || franc(tweet.fullText) !== 'eng') {
-                    continue;
-                }
+                if (
+                    seenIds.has(tweet.id) ||
+                    !tweet.fullText ||
+                    tweet.fullText.length <= 20 ||
+                    franc(tweet.fullText) !== 'eng'
+                ) continue;
+
                 seenIds.add(tweet.id);
                 allTweets.push({ text: tweet.fullText });
             }
+
             cursor = tweets.next;
             if (!cursor) hasMore = false;
+
+            // ✅ Delay between requests (1–2s)
+            await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 1000));
         }
+
         if (allTweets.length >= totalCount) break;
     }
+
     return allTweets.slice(0, totalCount);
 }
 
-// Define the API endpoint
+// ✅ API endpoint
 app.post('/api/fetch-tweets', async (req, res) => {
     try {
-        const { topic, count = 200 } = req.body;
+        const { topic } = req.body;
 
         if (!topic) {
             return res.status(400).json({ success: false, error: 'Topic is required.' });
         }
 
-        console.log(`Received request to fetch ${count} tweets for topic: ${topic}`);
-        const tweets = await getTweets(topic, count);
+        console.log(`📩 Fetching 20 tweets for topic: "${topic}"`);
+        const tweets = await getTweets(topic, 20);  // ✅ Enforced 20 tweets
 
         if (tweets.length > 0) {
-            console.log(`Successfully fetched ${tweets.length} tweets.`);
-            res.status(200).json({ success: true, tweets: tweets.map(t => t.text) });
+            return res.status(200).json({
+                success: true,
+                tweets // ✅ [{ text: ... }] format
+            });
         } else {
-            console.log(`No tweets found for topic: ${topic}`);
-            res.status(404).json({ success: false, error: 'No tweets found for this topic.' });
+            return res.status(404).json({
+                success: false,
+                error: 'No suitable English tweets found.'
+            });
         }
     } catch (error) {
-        console.error('Critical Error in API endpoint:', error);
-        res.status(500).json({ success: false, error: 'An internal server error occurred.' });
+        console.error('❌ API Internal Error:', error);
+        return res.status(500).json({
+            success: false,
+            error: 'Internal server error.'
+        });
     }
 });
 
-// Vercel handles the listening part, but this is good for local testing
+// ✅ Local testing support
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
+    console.log(`🚀 Server running on port ${PORT}`);
 });
 
-// Export the app for Vercel
-module.exports = app;
+module.exports = app; // ✅ For Vercel
