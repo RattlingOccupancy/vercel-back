@@ -6,7 +6,7 @@ const app = express();
 
 app.use(express.json());
 
-// IMPORTANT: Read key from Vercel Environment Variables
+// ✅ Use API keys from Vercel Environment Variables
 const apiKeys = [
     "a2R0PXFjdlRVM3dtR3ZEU0lCMmhiRUtxYXBXZ2F6MzR6ZnZENjlsY2J2NmY7YXV0aF90b2tlbj01ZmEwODVkOWM2YWMzODlkY2Y4MjRlNjc5MzQwNzc5ZTg0NWRmZTM1O2N0MD1mZjRkNTYyMDU0YTZhZWU4OTMxYTY5ODNjNjc0NmQ5NDljZWNlZGQ5MDc0ZjA2MDliYzFjNmFhMjY4NzE0OWVmNzE2YTU3YmIxMWY1YjBlM2VlMjc0MmQzNjk4OTk4ZjQxNjA0ZGJiNTIyODAyOWQ4NzgxNjdmMmNhYTliMDBiY2YzZGI5MWE0YzZjN2Q5YTY2NmQzZmNkNGE4NmM2ZDQ5O3R3aWQ9dSUzRDE2NzE0MzAzMDg4NzE0MDU1Njg7",
     
@@ -79,61 +79,79 @@ const apiKeys = [
 
 "a2R0PWEzZ3pQY3dXWnFaT0xSckdXamR6TUhseDdJdG96ZkFMbWZpZlNEbVI7YXV0aF90b2tlbj1kZGY1NmIyYThmOTViZmYxMzBlNzg3YjA3MWM3ZWFhYmYzOTIwZDM3O2N0MD1mMmRmZjZlNzQ5OTcxODcxMTFhZWIzNGU4OGQwNjFkODYyOGRkZmIwNTY1Zjc4MGEyMGYwZjI1N2Y2YTM0NWQyOWJhZTQ2NDNhOGUyMDhiM2I0M2E0ZGNhOWM4MjZhY2ViNjA5NzNmM2IwN2E2OWZjYzk3YmNkM2U0YTNlODhhMGIwNGJiMzkxODljYzY2MmQ3NmM0YTc2MWE2MWQ0MjEzO3R3aWQ9dSUzRDE2NzE0MzAzMDg4NzE0MDU1Njg7"
 ];
-
+// ✅ Create Rettiwt instance with random delay and random API key
 function createRandomRettiwt() {
     const randomKey = apiKeys[Math.floor(Math.random() * apiKeys.length)];
     return new Rettiwt({
         apiKey: randomKey,
-        logging: false,
+        logging: true,
+        delay: () => 1000 + Math.random() * 1000 // 1–2 seconds random delay
     });
 }
 
+// ✅ Main Tweet Fetch Logic
 async function getTweets(topic, totalCount = 20) {
     const allTweets = [];
     const seenIds = new Set();
-    const filter = { keywords: [topic] };
-    const rettiwt = createRandomRettiwt();
-    let cursor = undefined;
-    let hasMore = true;
 
-    while (hasMore && allTweets.length < totalCount) {
-        const batchSize = Math.min(50, totalCount - allTweets.length);
-        let tweets;
-        try {
-            tweets = await rettiwt.tweet.search(filter, batchSize, cursor);
-        } catch (err) {
-            console.error(`API error: ${err.message}`);
-            break;
-        }
+    const filters = [
+        { keywords: [topic] },
+        { hashtags: [topic.replace('#', '')] }
+    ];
 
-        if (!tweets?.list?.length) {
-            hasMore = false;
-            break;
-        }
+    for (const filter of filters) {
+        while (allTweets.length < totalCount) {
+            const batchSize = Math.min(50, totalCount - allTweets.length);
+            const rettiwt = createRandomRettiwt();
 
-        for (const tweet of tweets.list) {
-            if (seenIds.has(tweet.id) || !tweet.fullText || tweet.fullText.length <= 20 || franc(tweet.fullText) !== 'eng') {
-                continue;
+            let tweets;
+            try {
+                tweets = await rettiwt.tweet.search({
+                    ...filter,
+                    maxResults: batchSize
+                });
+            } catch (err) {
+                console.error(`⚠️ API error (will try next key): ${err.message}`);
+                continue; // Retry with another key on next loop
             }
-            seenIds.add(tweet.id);
-            allTweets.push({ text: tweet.fullText });
+
+            if (!tweets?.list?.length) break;
+
+            for (const tweet of tweets.list) {
+                if (
+                    seenIds.has(tweet.id) ||
+                    !tweet.fullText ||
+                    tweet.fullText.length <= 20 ||
+                    franc(tweet.fullText) !== 'eng'
+                ) {
+                    continue;
+                }
+                seenIds.add(tweet.id);
+                allTweets.push({ text: tweet.fullText });
+            }
+
+            console.log(`🔁 Fetched ${allTweets.length}/${totalCount} English tweets so far...`);
+
+            // ⏱️ Optional backup delay to prevent aggressive calls
+            await new Promise(resolve => setTimeout(resolve, 500));
         }
 
-        cursor = tweets.next;
-        if (!cursor) hasMore = false;
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        if (allTweets.length >= totalCount) break;
     }
+
     return allTweets.slice(0, totalCount);
 }
 
-// ✅ CORRECTED ROUTE: It must be '/'
+// ✅ Vercel-Compatible POST Route (keep it '/')
 app.post('/', async (req, res) => {
     try {
         const { topic } = req.body;
+
         if (!topic) {
             return res.status(400).json({ success: false, error: 'Topic is required.' });
         }
-        console.log(`📩 Fetching 20 tweets for topic: "${topic}"`);
+
+        console.log(`📩 Fetching ${20} tweets for topic: "${topic}"`);
         const tweets = await getTweets(topic, 20);
 
         if (tweets.length > 0) {
@@ -147,6 +165,5 @@ app.post('/', async (req, res) => {
     }
 });
 
-// DO NOT USE app.listen() IN A VERCEL FUNCTION
-// module.exports is all that's needed
+// 🚫 Do NOT use app.listen() on Vercel
 module.exports = app;
