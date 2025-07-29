@@ -6,7 +6,7 @@ const app = express();
 
 app.use(express.json());
 
-// ✅ Use API keys from Vercel Environment Variables
+// API keys from environment variables
 const apiKeys = [
     "a2R0PXFjdlRVM3dtR3ZEU0lCMmhiRUtxYXBXZ2F6MzR6ZnZENjlsY2J2NmY7YXV0aF90b2tlbj01ZmEwODVkOWM2YWMzODlkY2Y4MjRlNjc5MzQwNzc5ZTg0NWRmZTM1O2N0MD1mZjRkNTYyMDU0YTZhZWU4OTMxYTY5ODNjNjc0NmQ5NDljZWNlZGQ5MDc0ZjA2MDliYzFjNmFhMjY4NzE0OWVmNzE2YTU3YmIxMWY1YjBlM2VlMjc0MmQzNjk4OTk4ZjQxNjA0ZGJiNTIyODAyOWQ4NzgxNjdmMmNhYTliMDBiY2YzZGI5MWE0YzZjN2Q5YTY2NmQzZmNkNGE4NmM2ZDQ5O3R3aWQ9dSUzRDE2NzE0MzAzMDg4NzE0MDU1Njg7",
     
@@ -79,21 +79,24 @@ const apiKeys = [
 
 "a2R0PWEzZ3pQY3dXWnFaT0xSckdXamR6TUhseDdJdG96ZkFMbWZpZlNEbVI7YXV0aF90b2tlbj1kZGY1NmIyYThmOTViZmYxMzBlNzg3YjA3MWM3ZWFhYmYzOTIwZDM3O2N0MD1mMmRmZjZlNzQ5OTcxODcxMTFhZWIzNGU4OGQwNjFkODYyOGRkZmIwNTY1Zjc4MGEyMGYwZjI1N2Y2YTM0NWQyOWJhZTQ2NDNhOGUyMDhiM2I0M2E0ZGNhOWM4MjZhY2ViNjA5NzNmM2IwN2E2OWZjYzk3YmNkM2U0YTNlODhhMGIwNGJiMzkxODljYzY2MmQ3NmM0YTc2MWE2MWQ0MjEzO3R3aWQ9dSUzRDE2NzE0MzAzMDg4NzE0MDU1Njg7"
 ];
-// ✅ Create Rettiwt instance with random delay and random API key
+
 function createRandomRettiwt() {
+    if (apiKeys.length === 0) {
+        throw new Error('No API keys available');
+    }
     const randomKey = apiKeys[Math.floor(Math.random() * apiKeys.length)];
     return new Rettiwt({
         apiKey: randomKey,
-        logging: true,
-        delay: () => 1000 + Math.random() * 1000 // 1–2 seconds random delay
+        logging: false,
+        delay: () => 1000 + Math.random() * 1000 // 1-2 sec delay
     });
 }
 
-// ✅ Main Tweet Fetch Logic
 async function getTweets(topic, totalCount = 20) {
     const allTweets = [];
     const seenIds = new Set();
-
+    
+    // Define multiple search filters
     const filters = [
         { keywords: [topic] },
         { hashtags: [topic.replace('#', '')] }
@@ -101,9 +104,10 @@ async function getTweets(topic, totalCount = 20) {
 
     for (const filter of filters) {
         while (allTweets.length < totalCount) {
-            const batchSize = Math.min(50, totalCount - allTweets.length);
-            const rettiwt = createRandomRettiwt();
-
+            const remaining = totalCount - allTweets.length;
+            const batchSize = Math.min(50, remaining);
+            const rettiwt = createRandomRettiwt(); // Random key + delay
+            
             let tweets;
             try {
                 tweets = await rettiwt.tweet.search({
@@ -111,70 +115,65 @@ async function getTweets(topic, totalCount = 20) {
                     maxResults: batchSize
                 });
             } catch (err) {
-                console.error(`⚠️ API error (will try next key): ${err.message}`);
-                continue; // Retry with another key on next loop
+                console.error(`⚠️ API error (switching key): ${err.message}`);
+                continue; // Try with new key on next iteration
             }
 
-            if (!tweets?.list?.length) break;
+            if (!tweets?.list?.length) break; // No more tweets for this filter
+            
+            // Filter valid English tweets
+            const validTweets = tweets.list.filter(t => 
+                t.fullText?.length > 20 && 
+                !seenIds.has(t.id) && 
+                franc(t.fullText) === 'eng'
+            );
+            
+            // Add to results
+            validTweets.forEach(t => {
+                seenIds.add(t.id);
+                allTweets.push({ text: t.fullText });
+            });
 
-            for (const tweet of tweets.list) {
-                if (
-                    seenIds.has(tweet.id) ||
-                    !tweet.fullText ||
-                    tweet.fullText.length <= 20 ||
-                    franc(tweet.fullText) !== 'eng'
-                ) {
-                    continue;
-                }
-                seenIds.add(tweet.id);
-                allTweets.push({ text: tweet.fullText });
-            }
-
-            console.log(`🔁 Fetched ${allTweets.length}/${totalCount} English tweets so far...`);
-
-            // ⏱️ Optional backup delay to prevent aggressive calls
+            console.log(`🔁 Fetched ${allTweets.length}/${totalCount} tweets...`);
+            
+            // Additional safety delay
             await new Promise(resolve => setTimeout(resolve, 500));
         }
-
         if (allTweets.length >= totalCount) break;
     }
-
     return allTweets.slice(0, totalCount);
 }
 
-// ✅ Vercel-Compatible POST Route (keep it '/')
-
 app.post('/', async (req, res) => {
-
-// app.post('/api/fetch-tweets', async (req, res) => {
     try {
         const { topic } = req.body;
-
         if (!topic) {
             return res.status(400).json({ success: false, error: 'Topic is required.' });
         }
-
-        console.log(`📩 Fetching ${20} tweets for topic: "${topic}"`);
+        console.log(`🚀 Starting fetch for '${topic}'...`);
+        
         const tweets = await getTweets(topic, 20);
 
         if (tweets.length > 0) {
-            return res.status(200).json({ success: true, tweets });
+            return res.json({ success: true, tweets });
         } else {
-            return res.status(404).json({ success: false, error: 'No suitable English tweets found.' });
+            return res.status(404).json({ 
+                success: false, 
+                error: 'No suitable English tweets found.' 
+            });
         }
     } catch (error) {
-        console.error('❌ API Internal Error:', error);
-        return res.status(500).json({ success: false, error: 'Internal server error.' });
+        console.error('❌ Critical Error:', error);
+        return res.status(500).json({ 
+            success: false, 
+            error: error.message || 'Internal server error.' 
+        });
     }
 });
 
-// 🚫 Do NOT use app.listen() on Vercel
-
-
-// const PORT = process.env.PORT || 3001;
-// app.listen(PORT, () => {
-//     console.log(`Server running on port ${PORT}`);
-// });
-
-
 module.exports = app;
+
+
+
+
+
