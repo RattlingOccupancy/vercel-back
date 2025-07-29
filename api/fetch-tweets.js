@@ -129,7 +129,7 @@ async function getTweets(topic, totalCount) {
 }
 
 // Define the API endpoint
-app.post('/api/fetch-tweets', async (req, res) => {
+app.post('/', async (req, res) => {
     try {
         const { topic, count = 200 } = req.body;
 
