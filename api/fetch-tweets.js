@@ -143,7 +143,10 @@ async function getTweets(topic, totalCount = 20) {
 }
 
 // ✅ Vercel-Compatible POST Route (keep it '/')
+
 app.post('/', async (req, res) => {
+
+// app.post('/api/fetch-tweets', async (req, res) => {
     try {
         const { topic } = req.body;
 
@@ -166,4 +169,12 @@ app.post('/', async (req, res) => {
 });
 
 // 🚫 Do NOT use app.listen() on Vercel
+
+
+// const PORT = process.env.PORT || 3001;
+// app.listen(PORT, () => {
+//     console.log(`Server running on port ${PORT}`);
+// });
+
+
 module.exports = app;
