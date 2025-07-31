@@ -1,3 +1,5 @@
+// claude code tested successfully on postman
+
 const { Rettiwt } = require('rettiwt-api');
 const francModule = require('franc');
 const franc = francModule.franc;
@@ -6,7 +8,7 @@ const app = express();
 
 app.use(express.json());
 
-// API keys from environment variables
+// IMPORTANT: Read keys from Vercel Environment Variables
 const apiKeys = [
     "a2R0PXFjdlRVM3dtR3ZEU0lCMmhiRUtxYXBXZ2F6MzR6ZnZENjlsY2J2NmY7YXV0aF90b2tlbj01ZmEwODVkOWM2YWMzODlkY2Y4MjRlNjc5MzQwNzc5ZTg0NWRmZTM1O2N0MD1mZjRkNTYyMDU0YTZhZWU4OTMxYTY5ODNjNjc0NmQ5NDljZWNlZGQ5MDc0ZjA2MDliYzFjNmFhMjY4NzE0OWVmNzE2YTU3YmIxMWY1YjBlM2VlMjc0MmQzNjk4OTk4ZjQxNjA0ZGJiNTIyODAyOWQ4NzgxNjdmMmNhYTliMDBiY2YzZGI5MWE0YzZjN2Q5YTY2NmQzZmNkNGE4NmM2ZDQ5O3R3aWQ9dSUzRDE2NzE0MzAzMDg4NzE0MDU1Njg7",
     
@@ -80,100 +82,102 @@ const apiKeys = [
 "a2R0PWEzZ3pQY3dXWnFaT0xSckdXamR6TUhseDdJdG96ZkFMbWZpZlNEbVI7YXV0aF90b2tlbj1kZGY1NmIyYThmOTViZmYxMzBlNzg3YjA3MWM3ZWFhYmYzOTIwZDM3O2N0MD1mMmRmZjZlNzQ5OTcxODcxMTFhZWIzNGU4OGQwNjFkODYyOGRkZmIwNTY1Zjc4MGEyMGYwZjI1N2Y2YTM0NWQyOWJhZTQ2NDNhOGUyMDhiM2I0M2E0ZGNhOWM4MjZhY2ViNjA5NzNmM2IwN2E2OWZjYzk3YmNkM2U0YTNlODhhMGIwNGJiMzkxODljYzY2MmQ3NmM0YTc2MWE2MWQ0MjEzO3R3aWQ9dSUzRDE2NzE0MzAzMDg4NzE0MDU1Njg7"
 ];
 
+// ✅ Helper: Create Rettiwt instance with random delay and random key (same as first code)
 function createRandomRettiwt() {
-    if (apiKeys.length === 0) {
-        throw new Error('No API keys available');
-    }
     const randomKey = apiKeys[Math.floor(Math.random() * apiKeys.length)];
     return new Rettiwt({
         apiKey: randomKey,
-        logging: false,
-        delay: () => 1000 + Math.random() * 1000 // 1-2 sec delay
+        logging: true,
+        delay: () => 1000 + Math.random() * 1000 // 1–2 sec delay (same as first code)
     });
 }
 
-async function getTweets(topic, totalCount = 20) {
-    const allTweets = [];
-    const seenIds = new Set();
-    
-    // Define multiple search filters
-    const filters = [
-        { keywords: [topic] },
-        { hashtags: [topic.replace('#', '')] }
-    ];
+// 🐦 Enhanced Tweet Fetcher with first code's logic
+async function fetchTweets(topic, totalCount = 20) {
+    try {
+        console.log(`🚀 Starting fetch for '${topic}'...`);
+        const allTweets = [];
 
-    for (const filter of filters) {
-        while (allTweets.length < totalCount) {
-            const remaining = totalCount - allTweets.length;
-            const batchSize = Math.min(50, remaining);
-            const rettiwt = createRandomRettiwt(); // Random key + delay
-            
-            let tweets;
-            try {
-                tweets = await rettiwt.tweet.search({
-                    ...filter,
-                    maxResults: batchSize
-                });
-            } catch (err) {
-                console.error(`⚠️ API error (switching key): ${err.message}`);
-                continue; // Try with new key on next iteration
+        // ✅ Same filters as first code
+        const filters = [
+            { keywords: [topic] },
+            { hashtags: [topic.replace('#', '')] }
+        ];
+
+        for (const filter of filters) {
+            while (allTweets.length < totalCount) {
+                const remaining = totalCount - allTweets.length;
+                const batchSize = Math.min(50, remaining);
+
+                const rettiwt = createRandomRettiwt(); // 🔁 Use random key for every request (same as first code)
+
+                let tweets;
+                try {
+                    tweets = await rettiwt.tweet.search({
+                        ...filter,
+                        maxResults: batchSize
+                    });
+                } catch (err) {
+                    console.error(`⚠️ API key error (will try another on next call): ${err.message}`);
+                    continue; // Retry with next random key (same as first code)
+                }
+
+                if (!tweets || !tweets.list || tweets.list.length === 0) break;
+
+                // ✅ Same filtering logic as first code
+                const englishTweets = tweets.list.filter(t =>
+                    (t.fullText || '').length > 20 && franc(t.fullText || '') === 'eng'
+                );
+
+                allTweets.push(...englishTweets.map(t => ({ text: t.fullText })));
+
+                console.log(`🔁 Fetched ${allTweets.length}/${totalCount} English tweets so far...`);
+
+                // ⏱️ Optional backup delay (same as first code)
+                await new Promise(resolve => setTimeout(resolve, 500));
             }
 
-            if (!tweets?.list?.length) break; // No more tweets for this filter
-            
-            // Filter valid English tweets
-            const validTweets = tweets.list.filter(t => 
-                t.fullText?.length > 20 && 
-                !seenIds.has(t.id) && 
-                franc(t.fullText) === 'eng'
-            );
-            
-            // Add to results
-            validTweets.forEach(t => {
-                seenIds.add(t.id);
-                allTweets.push({ text: t.fullText });
-            });
-
-            console.log(`🔁 Fetched ${allTweets.length}/${totalCount} tweets...`);
-            
-            // Additional safety delay
-            await new Promise(resolve => setTimeout(resolve, 500));
+            if (allTweets.length >= totalCount) break;
         }
-        if (allTweets.length >= totalCount) break;
+
+        return allTweets.slice(0, totalCount);
+
+    } catch (error) {
+        console.error('❌ Final Error:', error.message);
+        throw error;
     }
-    return allTweets.slice(0, totalCount);
 }
 
+// ✅ API Route
 app.post('/', async (req, res) => {
     try {
         const { topic } = req.body;
         if (!topic) {
             return res.status(400).json({ success: false, error: 'Topic is required.' });
         }
-        console.log(`🚀 Starting fetch for '${topic}'...`);
         
-        const tweets = await getTweets(topic, 20);
+        console.log(`📩 Fetching 20 tweets for topic: "${topic}"`);
+        const tweets = await fetchTweets(topic, 20);
 
         if (tweets.length > 0) {
-            return res.json({ success: true, tweets });
+            console.log(`✅ Successfully fetched ${tweets.length} English tweets`);
+            return res.status(200).json({ success: true, tweets });
         } else {
-            return res.status(404).json({ 
-                success: false, 
-                error: 'No suitable English tweets found.' 
-            });
+            console.error('❌ No English tweets found');
+            return res.status(404).json({ success: false, error: 'No suitable English tweets found.' });
         }
     } catch (error) {
-        console.error('❌ Critical Error:', error);
-        return res.status(500).json({ 
-            success: false, 
-            error: error.message || 'Internal server error.' 
-        });
+        console.error('❌ API Internal Error:', error);
+        return res.status(500).json({ success: false, error: 'Internal server error.' });
     }
 });
 
+// DO NOT USE app.listen() IN A VERCEL FUNCTION
+// module.exports is all that's needed
+
+
+
+
+
+
 module.exports = app;
-
-
-
-
-
