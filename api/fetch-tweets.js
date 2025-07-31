@@ -106,5 +106,10 @@ app.post('/', async (req, res) => {
     }
 });
 
-// ✅ Export as Vercel handler
-module.exports = app;
+const server = app;
+
+export default async function handler(req, res) {
+  // Let Express handle it internally
+  server(req, res);
+}
+
