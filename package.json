@@ -1,7 +1,7 @@
 {
     "name": "twitter-fetcher-api",
     "version": "1.0.0",
-    "main": "api/tweet_fetch_api.js",
+    "main": "api/fetch-tweets.js",
     "dependencies": {
         "express": "^4.21.2",
         "franc": "^6.2.0",
