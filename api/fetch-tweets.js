@@ -1,10 +1,9 @@
-// gpt code api's are on environment variables on vercel
+// grok code recommendation
+
 
 
 
 const { Rettiwt } = require('rettiwt-api');
-const francModule = require('franc');
-const franc = francModule.franc;
 const express = require('express');
 const app = express();
 
@@ -39,6 +38,10 @@ async function fetchTweets(topic, totalCount = 20) {
             { keywords: [topic] },
             { hashtags: [topic.replace('#', '')] }
         ];
+
+        // Dynamically import franc
+        const francModule = await import('franc');
+        const franc = francModule.franc;
 
         for (const filter of filters) {
             while (allTweets.length < totalCount) {
@@ -109,7 +112,6 @@ app.post('/', async (req, res) => {
 const server = app;
 
 export default async function handler(req, res) {
-  // Let Express handle it internally
-  server(req, res);
+    // Let Express handle it internally
+    server(req, res);
 }
-
